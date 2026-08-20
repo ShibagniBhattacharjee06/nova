@@ -62,11 +62,12 @@ if not API_KEY:
     )
 
 
-MODEL = "gemini-3.6-flash"
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 client = genai.Client(
     api_key=API_KEY
 )
+
 
 
 # ============================================================
@@ -299,20 +300,25 @@ def new_chat():
 
     except Exception as e:
 
+        err_str = str(e)
+
         print()
         print("=" * 60)
         print("❌ NEW CHAT ERROR")
         print("=" * 60)
+        print(err_str)
 
-        print(str(e))
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            user_msg = "Nova is temporarily unavailable because the AI usage limit has been reached. Please try again in a few moments."
+            status_code = 429
+        else:
+            user_msg = "Failed to start a new chat session. Please try again."
+            status_code = 500
 
         return jsonify({
-
             "success": False,
-
-            "error": str(e)
-
-        }), 500
+            "error": user_msg
+        }), status_code
 
 
 # ============================================================
@@ -472,21 +478,25 @@ def chat():
 
     except Exception as e:
 
+        err_str = str(e)
+
         print()
         print("=" * 60)
         print("❌ CHAT ERROR")
         print("=" * 60)
+        print(err_str)
 
-        print(str(e))
-
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            user_msg = "Nova is temporarily unavailable because the AI usage limit has been reached. Please try again later."
+            status_code = 429
+        else:
+            user_msg = "Nova encountered an issue processing your message. Please try again."
+            status_code = 500
 
         return jsonify({
-
             "success": False,
-
-            "error": str(e)
-
-        }), 500
+            "error": user_msg
+        }), status_code
 
 
 # ============================================================

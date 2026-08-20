@@ -305,7 +305,7 @@ async function sendMessage() {
         console.error("Nova API error:", error);
         removeTypingIndicator();
         addMessage(
-            "I couldn't connect to Nova's AI server: " + (error.message || "Unknown error"),
+            error.message || "Nova is temporarily unavailable. Please try again later.",
             "ai"
         );
     }
