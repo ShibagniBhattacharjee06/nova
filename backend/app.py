@@ -35,9 +35,19 @@ FRONTEND_DIR = os.path.join(
 # FLASK
 # ============================================================
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../frontend", static_url_path="")
 
 CORS(app)
+
+
+# ============================================================
+# FRONTEND STATIC ROUTE
+# ============================================================
+
+@app.route("/", methods=["GET"])
+def index():
+    return app.send_static_file("index.html")
+
 
 
 # ============================================================
@@ -533,12 +543,11 @@ if __name__ == "__main__":
     print()
     print("=" * 60)
 
+    port = int(os.getenv("PORT", 5000))
+
     app.run(
-
         host="0.0.0.0",
-
         port=port,
-
         debug=False
-
     )
+
