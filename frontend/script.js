@@ -1,432 +1,696 @@
-const API = "http://127.0.0.1:5000";
-
-let chatId = null;
-
-
-const chat = document.getElementById("chat");
-
-const input = document.getElementById("messageInput");
-
-const sendButton = document.getElementById("sendButton");
-
-const welcome = document.getElementById("welcome");
-
-const newChatButton = document.getElementById("newChat");
-
-
 /* ============================================================
-   NEW CHAT
+   NOVA AI — FRONTEND
    ============================================================ */
+
+const API_BASE = "";
+
+// ============================================================
+// STATE
+// ============================================================
+
+let currentChatId = null;
+let isSending = false;
+
+
+// ============================================================
+// DOM HELPERS
+// ============================================================
+
+const $ = (selector) => document.querySelector(selector);
+
+const messagesContainer =
+    $("#messages") ||
+    $(".messages") ||
+    $(".chat-messages") ||
+    $(".message-list");
+
+const messageInput =
+    $("#message-input") ||
+    $("#messageInput") ||
+    $("textarea") ||
+    $("input[type='text']");
+
+const sendButton =
+    $("#send-button") ||
+    $("#sendButton") ||
+    $("button[type='submit']");
+
+const newChatButton =
+    $("#new-chat") ||
+    $("#newChat") ||
+    $(".new-chat");
+
+
+// ============================================================
+// API
+// ============================================================
+
+async function apiRequest(endpoint, options = {}) {
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        }
+    });
+
+    let data;
+
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error(`Server returned HTTP ${response.status}`);
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.error ||
+            data.message ||
+            `Server error: ${response.status}`
+        );
+    }
+
+    return data;
+}
+
+
+// ============================================================
+// CREATE NEW CHAT
+// ============================================================
 
 async function createNewChat() {
 
     try {
 
-        const response = await fetch(
-            `${API}/api/new-chat`,
+        const data = await apiRequest("/api/new-chat", {
+            method: "POST"
+        });
+
+        currentChatId = data.chat_id;
+
+        clearMessages();
+
+        addWelcomeMessage();
+
+        console.log("Nova chat created:", currentChatId);
+
+    } catch (error) {
+
+        console.error("New chat error:", error);
+
+        showError(
+            "Unable to create a new chat. Please try again."
+        );
+    }
+}
+
+
+// ============================================================
+// SEND MESSAGE
+// ============================================================
+
+async function sendMessage() {
+
+    if (isSending) return;
+
+    if (!messageInput) {
+        console.error("Message input not found.");
+        return;
+    }
+
+    const message = messageInput.value.trim();
+
+    if (!message) return;
+
+    isSending = true;
+
+    // Show user's message
+    addMessage(message, "user");
+
+    // Clear input
+    messageInput.value = "";
+
+    // Reset textarea height
+    messageInput.style.height = "auto";
+
+    // Disable send button
+    setSendingState(true);
+
+    // Show typing indicator
+    const typingId = showTypingIndicator();
+
+    try {
+
+        // ----------------------------------------------------
+        // CREATE CHAT IF NEEDED
+        // ----------------------------------------------------
+
+        if (!currentChatId) {
+
+            const newChat = await apiRequest(
+                "/api/new-chat",
+                {
+                    method: "POST"
+                }
+            );
+
+            currentChatId = newChat.chat_id;
+        }
+
+
+        // ----------------------------------------------------
+        // SEND MESSAGE TO FLASK
+        // ----------------------------------------------------
+
+        const data = await apiRequest(
+            "/api/chat",
             {
-                method: "POST"
+                method: "POST",
+
+                body: JSON.stringify({
+                    chat_id: currentChatId,
+                    message: message
+                })
             }
         );
 
-        const data = await response.json();
 
-        chatId = data.chat_id;
+        // ----------------------------------------------------
+        // REMOVE TYPING
+        // ----------------------------------------------------
 
+        removeTypingIndicator(typingId);
+
+
+        // ----------------------------------------------------
+        // HANDLE RESPONSE
+        // ----------------------------------------------------
+
+        if (data.response) {
+
+            addMessage(
+                data.response,
+                "assistant"
+            );
+
+        } else {
+
+            addMessage(
+                "I received an empty response from the AI server.",
+                "assistant"
+            );
+        }
+
+
+        console.log("Nova response:", data);
+
+    } catch (error) {
+
+        console.error("Chat error:", error);
+
+        removeTypingIndicator(typingId);
+
+        showError(
+            "I couldn't connect to the AI server. Please try again."
+        );
+
+    } finally {
+
+        isSending = false;
+
+        setSendingState(false);
+
+        focusInput();
     }
-
-    catch (error) {
-
-        console.error(error);
-
-    }
-
 }
 
 
-/* ============================================================
-   MESSAGE ELEMENT
-   ============================================================ */
+// ============================================================
+// ADD MESSAGE
+// ============================================================
 
-function addMessage(
-    text,
-    type
-) {
+function addMessage(text, sender) {
 
-    if (welcome) {
-
-        welcome.style.display = "none";
-
+    if (!messagesContainer) {
+        console.error("Messages container not found.");
+        return;
     }
 
+    const messageWrapper = document.createElement("div");
 
-    const wrapper =
-        document.createElement("div");
+    messageWrapper.className =
+        `message ${sender}-message`;
 
-    wrapper.className =
-        `message ${type}`;
+    const bubble = document.createElement("div");
 
-
-    const content =
-        document.createElement("div");
-
-    content.className =
-        "message-content";
+    bubble.className = "message-bubble";
 
 
-    content.innerHTML =
-        formatMessage(text);
+    // --------------------------------------------------------
+    // Convert basic markdown safely
+    // --------------------------------------------------------
+
+    bubble.innerHTML = formatMessage(text);
 
 
-    wrapper.appendChild(content);
+    messageWrapper.appendChild(bubble);
 
-    chat.appendChild(wrapper);
-
+    messagesContainer.appendChild(messageWrapper);
 
     scrollToBottom();
-
 }
 
 
-/* ============================================================
-   BASIC MARKDOWN
-   ============================================================ */
+// ============================================================
+// MESSAGE FORMATTER
+// ============================================================
 
 function formatMessage(text) {
 
-    let html = text;
+    if (!text) return "";
 
-    html = html.replace(
+    // Escape HTML first
+    let safe = escapeHTML(text);
+
+
+    // Code blocks
+    safe = safe.replace(
+        /```([\s\S]*?)```/g,
+        "<pre><code>$1</code></pre>"
+    );
+
+
+    // Inline code
+    safe = safe.replace(
+        /`([^`]+)`/g,
+        "<code>$1</code>"
+    );
+
+
+    // Bold
+    safe = safe.replace(
         /\*\*(.*?)\*\*/g,
         "<strong>$1</strong>"
     );
 
-    html = html.replace(
-        /`(.*?)`/g,
-        "<code>$1</code>"
+
+    // Italic
+    safe = safe.replace(
+        /\*(.*?)\*/g,
+        "<em>$1</em>"
     );
 
-    html = html.replace(
+
+    // Links
+    safe = safe.replace(
+        /(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+
+
+    // New lines
+    safe = safe.replace(
         /\n/g,
         "<br>"
     );
 
-    return html;
 
+    return safe;
 }
 
 
-/* ============================================================
-   TYPING
-   ============================================================ */
+// ============================================================
+// ESCAPE HTML
+// ============================================================
 
-function showTyping() {
+function escapeHTML(text) {
+
+    const div = document.createElement("div");
+
+    div.textContent = text;
+
+    return div.innerHTML;
+}
+
+
+// ============================================================
+// WELCOME MESSAGE
+// ============================================================
+
+function addWelcomeMessage() {
+
+    if (!messagesContainer) return;
+
+    addMessage(
+        `Hello! I'm Nova ✦
+
+I'm your AI assistant. I can help with questions, calculations, product pricing and much more.
+
+What would you like to work on?`,
+        "assistant"
+    );
+}
+
+
+// ============================================================
+// CLEAR CHAT
+// ============================================================
+
+function clearMessages() {
+
+    if (!messagesContainer) return;
+
+    messagesContainer.innerHTML = "";
+}
+
+
+// ============================================================
+// TYPING INDICATOR
+// ============================================================
+
+function showTypingIndicator() {
+
+    if (!messagesContainer) return null;
+
+    const id =
+        `typing-${Date.now()}`;
 
     const wrapper =
         document.createElement("div");
 
     wrapper.className =
-        "message ai";
+        "message assistant-message";
 
-    wrapper.id =
-        "typingMessage";
+    wrapper.id = id;
 
+    const bubble =
+        document.createElement("div");
 
-    wrapper.innerHTML = `
+    bubble.className =
+        "message-bubble typing-bubble";
 
-        <div class="message-content">
-
-            <div class="typing">
-
-                <span></span>
-                <span></span>
-                <span></span>
-
-            </div>
-
-        </div>
-
+    bubble.innerHTML = `
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
     `;
 
+    wrapper.appendChild(bubble);
 
-    chat.appendChild(wrapper);
+    messagesContainer.appendChild(wrapper);
 
     scrollToBottom();
 
+    return id;
 }
 
 
-function removeTyping() {
+// ============================================================
+// REMOVE TYPING INDICATOR
+// ============================================================
 
-    const typing =
-        document.getElementById(
-            "typingMessage"
-        );
+function removeTypingIndicator(id) {
 
-    if (typing) {
+    if (!id) return;
 
-        typing.remove();
+    const element =
+        document.getElementById(id);
 
+    if (element) {
+        element.remove();
     }
-
 }
 
 
-/* ============================================================
-   SCROLL
-   ============================================================ */
+// ============================================================
+// ERROR MESSAGE
+// ============================================================
+
+function showError(message) {
+
+    if (!messagesContainer) return;
+
+    const wrapper =
+        document.createElement("div");
+
+    wrapper.className =
+        "message assistant-message error-message";
+
+    const bubble =
+        document.createElement("div");
+
+    bubble.className =
+        "message-bubble";
+
+    bubble.textContent = message;
+
+    wrapper.appendChild(bubble);
+
+    messagesContainer.appendChild(wrapper);
+
+    scrollToBottom();
+}
+
+
+// ============================================================
+// SEND BUTTON STATE
+// ============================================================
+
+function setSendingState(sending) {
+
+    if (!sendButton) return;
+
+    sendButton.disabled = sending;
+
+    if (sending) {
+
+        sendButton.classList.add("sending");
+
+    } else {
+
+        sendButton.classList.remove("sending");
+    }
+}
+
+
+// ============================================================
+// SCROLL
+// ============================================================
 
 function scrollToBottom() {
 
-    chat.scrollTo({
+    if (!messagesContainer) return;
 
-        top: chat.scrollHeight,
+    requestAnimationFrame(() => {
 
-        behavior: "smooth"
+        messagesContainer.scrollTo({
+            top: messagesContainer.scrollHeight,
+            behavior: "smooth"
+        });
 
     });
-
 }
 
 
-/* ============================================================
-   SEND MESSAGE
-   ============================================================ */
+// ============================================================
+// INPUT FOCUS
+// ============================================================
 
-async function sendMessage() {
+function focusInput() {
 
-    const message =
-        input.value.trim();
+    if (!messageInput) return;
+
+    setTimeout(() => {
+        messageInput.focus();
+    }, 100);
+}
 
 
-    if (!message) {
+// ============================================================
+// ENTER KEY
+// ============================================================
 
+function handleInputKeydown(event) {
+
+    // Enter = send
+    if (
+        event.key === "Enter" &&
+        !event.shiftKey
+    ) {
+
+        event.preventDefault();
+
+        sendMessage();
+    }
+}
+
+
+// ============================================================
+// AUTO RESIZE TEXTAREA
+// ============================================================
+
+function autoResizeInput() {
+
+    if (!messageInput) return;
+
+    if (
+        messageInput.tagName.toLowerCase() !==
+        "textarea"
+    ) {
         return;
+    }
 
+    messageInput.style.height = "auto";
+
+    messageInput.style.height =
+        `${Math.min(
+            messageInput.scrollHeight,
+            180
+        )}px`;
+}
+
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+
+function initializeEvents() {
+
+    // Send button
+    if (sendButton) {
+
+        sendButton.addEventListener(
+            "click",
+            sendMessage
+        );
     }
 
 
-    addMessage(
-        message,
-        "user"
-    );
+    // Input
+    if (messageInput) {
+
+        messageInput.addEventListener(
+            "keydown",
+            handleInputKeydown
+        );
+
+        messageInput.addEventListener(
+            "input",
+            autoResizeInput
+        );
+    }
 
 
-    input.value = "";
+    // New chat
+    if (newChatButton) {
 
-    input.style.height = "auto";
+        newChatButton.addEventListener(
+            "click",
+            createNewChat
+        );
+    }
+}
 
 
-    showTyping();
+// ============================================================
+// HEALTH CHECK
+// ============================================================
 
+async function checkServerHealth() {
 
     try {
 
-        const response =
-            await fetch(
-                `${API}/api/chat`,
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "application/json"
-
-                    },
-
-                    body: JSON.stringify({
-
-                        chat_id: chatId,
-
-                        message: message
-
-                    })
-
-                }
-            );
-
-
         const data =
-            await response.json();
+            await apiRequest("/api/health");
 
-
-        removeTyping();
-
-
-        if (!data.success) {
-
-            addMessage(
-
-                "Something went wrong: " +
-                data.error,
-
-                "ai"
-
-            );
-
-            return;
-
-        }
-
-
-        chatId =
-            data.chat_id;
-
-
-        addMessage(
-
-            data.response,
-
-            "ai"
-
+        console.log(
+            "Nova backend online:",
+            data
         );
 
-    }
+        updateOnlineStatus(true);
 
+    } catch (error) {
 
-    catch (error) {
-
-        removeTyping();
-
-
-        addMessage(
-
-            "I couldn't connect to the AI server. Make sure the Python backend is running.",
-
-            "ai"
-
+        console.error(
+            "Nova backend unavailable:",
+            error
         );
 
-
-        console.error(error);
-
+        updateOnlineStatus(false);
     }
-
 }
 
 
-/* ============================================================
-   SEND BUTTON
-   ============================================================ */
+// ============================================================
+// ONLINE STATUS
+// ============================================================
 
-sendButton.addEventListener(
+function updateOnlineStatus(online) {
 
-    "click",
+    const statusElements =
+        document.querySelectorAll(
+            ".status, .online-status, #status"
+        );
 
-    sendMessage
+    statusElements.forEach(element => {
 
-);
+        if (online) {
 
+            element.textContent =
+                "Online";
 
-/* ============================================================
-   ENTER KEY
-   ============================================================ */
-
-input.addEventListener(
-
-    "keydown",
-
-    function(event) {
-
-        if (
-
-            event.key === "Enter" &&
-
-            !event.shiftKey
-
-        ) {
-
-            event.preventDefault();
-
-            sendMessage();
-
-        }
-
-    }
-
-);
-
-
-/* ============================================================
-   AUTO RESIZE
-   ============================================================ */
-
-input.addEventListener(
-
-    "input",
-
-    function() {
-
-        this.style.height =
-            "auto";
-
-        this.style.height =
-            this.scrollHeight + "px";
-
-    }
-
-);
-
-
-/* ============================================================
-   SUGGESTIONS
-   ============================================================ */
-
-document
-    .querySelectorAll(".suggestion")
-    .forEach(
-
-        button => {
-
-            button.addEventListener(
-
-                "click",
-
-                function() {
-
-                    input.value =
-                        this.dataset.message;
-
-                    sendMessage();
-
-                }
-
+            element.classList.add(
+                "online"
             );
 
+            element.classList.remove(
+                "offline"
+            );
+
+        } else {
+
+            element.textContent =
+                "Offline";
+
+            element.classList.add(
+                "offline"
+            );
+
+            element.classList.remove(
+                "online"
+            );
         }
 
-    );
+    });
+}
 
 
-/* ============================================================
-   NEW CHAT BUTTON
-   ============================================================ */
+// ============================================================
+// INITIALIZATION
+// ============================================================
 
-newChatButton.addEventListener(
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
 
-    "click",
+        console.log(
+            "✦ Nova AI frontend initialized"
+        );
 
-    async function() {
+        console.log(
+            "API:",
+            `${window.location.origin}/api`
+        );
 
-        chat.innerHTML = "";
+        initializeEvents();
 
-        chatId = null;
+        await checkServerHealth();
 
-
+        // Create first conversation
         await createNewChat();
 
-
-        location.reload();
-
+        focusInput();
     }
-
 );
-
-
-/* ============================================================
-   INITIALIZE
-   ============================================================ */
-
-createNewChat();
