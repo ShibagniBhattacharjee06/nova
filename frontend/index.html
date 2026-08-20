@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Nova AI</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <!-- ============================================= -->
+    <!-- SIDEBAR -->
+    <!-- ============================================= -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-logo">
+                ✦
+            </div>
+
+            <div>
+
+                <div class="brand-title">
+                    Nova
+                </div>
+
+                <div class="brand-subtitle">
+                    AI Assistant
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <button
+            class="new-chat"
+            id="newChat"
+        >
+
+            <span>＋</span>
+
+            New Chat
+
+        </button>
+
+
+        <div class="section-title">
+            Tools
+        </div>
+
+
+        <div class="tool">
+
+            <div class="tool-icon">
+                ＋
+            </div>
+
+            <div>
+
+                <div class="tool-title">
+                    Calculator
+                </div>
+
+                <div class="tool-text">
+                    Smart calculations
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="tool">
+
+            <div class="tool-icon">
+                ◈
+            </div>
+
+            <div>
+
+                <div class="tool-title">
+                    Products
+                </div>
+
+                <div class="tool-text">
+                    Price calculations
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="sidebar-bottom">
+
+            <div class="online">
+
+                <span class="online-dot"></span>
+
+                Gemini Online
+
+            </div>
+
+            <div class="model">
+                Gemini 3.6 Flash
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ============================================= -->
+    <!-- MAIN -->
+    <!-- ============================================= -->
+
+    <main class="main">
+
+
+        <!-- HEADER -->
+
+        <header class="header">
+
+            <div>
+
+                <div class="header-title">
+                    Nova AI
+                </div>
+
+                <div class="header-status">
+
+                    <span class="status-dot"></span>
+
+                    Online
+
+                </div>
+
+            </div>
+
+
+            <button class="header-button">
+
+                ⋯
+
+            </button>
+
+        </header>
+
+
+        <!-- CHAT -->
+
+        <section
+            class="chat"
+            id="chat"
+        >
+
+
+            <!-- WELCOME -->
+
+            <div
+                class="welcome"
+                id="welcome"
+            >
+
+                <div class="welcome-orb">
+
+                    ✦
+
+                </div>
+
+
+                <h1>
+                    How can I help?
+                </h1>
+
+
+                <p>
+
+                    Your intelligent AI assistant
+                    for ideas, calculations and
+                    everyday tasks.
+
+                </p>
+
+
+                <div class="suggestions">
+
+
+                    <button
+                        class="suggestion"
+                        data-message="Add 125 and 375"
+                    >
+
+                        <span>＋</span>
+
+                        Calculate
+
+                    </button>
+
+
+                    <button
+                        class="suggestion"
+                        data-message="Calculate the total price of 3 laptops at 50000 each"
+                    >
+
+                        <span>◈</span>
+
+                        Product total
+
+                    </button>
+
+
+                    <button
+                        class="suggestion"
+                        data-message="Explain artificial intelligence in simple words"
+                    >
+
+                        <span>✦</span>
+
+                        Ask anything
+
+                    </button>
+
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- INPUT -->
+
+        <div class="input-area">
+
+
+            <div class="input-wrapper">
+
+
+                <textarea
+                    id="messageInput"
+                    placeholder="Message Nova..."
+                    rows="1"
+                ></textarea>
+
+
+                <button
+                    id="sendButton"
+                    class="send-button"
+                >
+
+                    ➤
+
+                </button>
+
+
+            </div>
+
+
+            <div class="input-footer">
+
+                Nova can make mistakes.
+                Check important information.
+
+            </div>
+
+
+        </div>
+
+
+    </main>
+
+</div>
+
+
+<script src="script.js"></script>
+
+</body>
+
+</html>
