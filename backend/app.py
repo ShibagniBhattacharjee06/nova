@@ -1,18 +1,34 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
 import os
 import uuid
 
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+
+from google import genai
+from google.genai import types
+
 
 # ============================================================
-# ENVIRONMENT
+# PATH CONFIGURATION
 # ============================================================
 
-# Load .env from the project root
-load_dotenv()
+# Project root:
+# nova/
+# ├── backend/
+# │   └── app.py
+# └── frontend/
+#     ├── index.html
+#     ├── style.css
+#     └── script.js
+
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
+FRONTEND_DIR = os.path.join(
+    BASE_DIR,
+    "frontend"
+)
 
 
 # ============================================================
@@ -28,29 +44,24 @@ CORS(app)
 # GEMINI CONFIGURATION
 # ============================================================
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not API_KEY:
     raise RuntimeError(
-        "GEMINI_API_KEY is missing. "
-        "Create a .env file in the project root."
+        "GEMINI_API_KEY environment variable is not set."
     )
 
 
 MODEL = "gemini-3.6-flash"
 
-client = genai.Client(api_key=API_KEY)
+client = genai.Client(
+    api_key=API_KEY
+)
 
 
 # ============================================================
 # CHAT STORAGE
 # ============================================================
-
-# Stores active Gemini chat sessions.
-# Example:
-# {
-#     "uuid": <Gemini chat session>
-# }
 
 chats = {}
 
@@ -62,13 +73,12 @@ chats = {}
 SYSTEM_INSTRUCTION = """
 You are Nova, a sophisticated AI assistant.
 
-Your goal is to help users naturally, intelligently,
+Your job is to help users naturally, intelligently,
 and professionally.
 
 PERSONALITY:
 - Friendly
 - Intelligent
-- Concise
 - Helpful
 - Professional
 - Conversational
@@ -76,21 +86,25 @@ PERSONALITY:
 RESPONSE STYLE:
 - Use markdown when useful.
 - Keep simple questions concise.
-- Give detailed explanations when the user asks for them.
-- Use examples when they improve understanding.
-- Never claim that a tool was executed if it was not.
+- Give detailed explanations when requested.
+- Use examples when helpful.
+- Do not claim a tool was executed if it was not.
 
 TOOLS:
 
 1. ADD TOOL
-Use the add tool when the user asks you to add two numbers.
+
+Use the add tool when the user asks you to add
+two numbers.
 
 2. PRODUCT TOOL
-Use the product tool when the user asks for the total
-cost of a product based on price and quantity.
 
-Always use the appropriate tool when the request clearly
-requires it.
+Use the product tool when the user asks you to
+calculate the total cost of a product using its
+price and quantity.
+
+Always use the appropriate tool when the request
+clearly requires it.
 """
 
 
@@ -100,14 +114,14 @@ requires it.
 
 def add(a: float, b: float) -> dict:
     """
-    Add two numbers together.
+    Add two numbers.
 
     Args:
         a: First number.
         b: Second number.
 
     Returns:
-        Dictionary containing the calculation result.
+        The addition result.
     """
 
     print()
@@ -115,13 +129,13 @@ def add(a: float, b: float) -> dict:
     print("🔧 ADD TOOL CALLED")
     print("=" * 60)
 
-    print(f"📥 a = {a}")
-    print(f"📥 b = {b}")
+    print(f"📥 First number  : {a}")
+    print(f"📥 Second number : {b}")
 
     result = a + b
 
-    print(f"🧮 {a} + {b} = {result}")
-    print("📤 Sending result back to Gemini")
+    print(f"🧮 Calculation   : {a} + {b} = {result}")
+    print("📤 Result sent back to Gemini")
 
     return {
         "operation": "addition",
@@ -149,7 +163,7 @@ def product(
         quantity: Number of units.
 
     Returns:
-        Dictionary containing product information and total.
+        Product information and total price.
     """
 
     print()
@@ -157,14 +171,14 @@ def product(
     print("🔧 PRODUCT TOOL CALLED")
     print("=" * 60)
 
-    print(f"📦 Product = {name}")
-    print(f"💰 Price = {price}")
-    print(f"🔢 Quantity = {quantity}")
+    print(f"📦 Product  : {name}")
+    print(f"💰 Price    : {price}")
+    print(f"🔢 Quantity : {quantity}")
 
     total = price * quantity
 
-    print(f"🧮 {price} × {quantity} = {total}")
-    print("📤 Sending result back to Gemini")
+    print(f"🧮 Calculation : {price} × {quantity} = {total}")
+    print("📤 Result sent back to Gemini")
 
     return {
         "product": name,
@@ -180,27 +194,76 @@ def product(
 
 def create_chat():
 
+    print("🧠 Creating new Gemini chat session...")
+
     chat = client.chats.create(
+
         model=MODEL,
 
         config=types.GenerateContentConfig(
+
             system_instruction=SYSTEM_INSTRUCTION,
 
             tools=[
                 add,
                 product
             ]
+
         )
     )
 
+    print("✅ Gemini chat session created")
+
     return chat
+
+
+# ============================================================
+# FRONTEND — HOME PAGE
+# ============================================================
+
+@app.route("/")
+def serve_frontend():
+
+    return send_from_directory(
+        FRONTEND_DIR,
+        "index.html"
+    )
+
+
+# ============================================================
+# FRONTEND — STATIC FILES
+# ============================================================
+
+@app.route("/<path:path>")
+def serve_static(path):
+
+    file_path = os.path.join(
+        FRONTEND_DIR,
+        path
+    )
+
+    if os.path.isfile(file_path):
+
+        return send_from_directory(
+            FRONTEND_DIR,
+            path
+        )
+
+    # Useful for frontend routing
+    return send_from_directory(
+        FRONTEND_DIR,
+        "index.html"
+    )
 
 
 # ============================================================
 # CREATE NEW CHAT
 # ============================================================
 
-@app.route("/api/new-chat", methods=["POST"])
+@app.route(
+    "/api/new-chat",
+    methods=["POST"]
+)
 def new_chat():
 
     try:
@@ -213,30 +276,43 @@ def new_chat():
         print("=" * 60)
         print("✨ NEW CHAT CREATED")
         print("=" * 60)
+
         print(f"Chat ID: {chat_id}")
 
         return jsonify({
+
             "success": True,
+
             "chat_id": chat_id
+
         })
 
     except Exception as e:
 
         print()
-        print("❌ ERROR CREATING CHAT")
+        print("=" * 60)
+        print("❌ NEW CHAT ERROR")
+        print("=" * 60)
+
         print(str(e))
 
         return jsonify({
+
             "success": False,
+
             "error": str(e)
+
         }), 500
 
 
 # ============================================================
-# CHAT ENDPOINT
+# CHAT API
 # ============================================================
 
-@app.route("/api/chat", methods=["POST"])
+@app.route(
+    "/api/chat",
+    methods=["POST"]
+)
 def chat():
 
     try:
@@ -245,19 +321,29 @@ def chat():
         # READ REQUEST
         # ----------------------------------------------------
 
-        data = request.get_json(silent=True)
+        data = request.get_json(
+            silent=True
+        )
 
         if not data:
 
             return jsonify({
+
                 "success": False,
+
                 "error": "Invalid JSON request."
+
             }), 400
 
 
-        chat_id = data.get("chat_id")
+        chat_id = data.get(
+            "chat_id"
+        )
 
-        message = data.get("message", "").strip()
+        message = data.get(
+            "message",
+            ""
+        ).strip()
 
 
         # ----------------------------------------------------
@@ -267,8 +353,11 @@ def chat():
         if not message:
 
             return jsonify({
+
                 "success": False,
+
                 "error": "Message cannot be empty."
+
             }), 400
 
 
@@ -278,11 +367,15 @@ def chat():
 
         if not chat_id:
 
-            chat_id = str(uuid.uuid4())
+            chat_id = str(
+                uuid.uuid4()
+            )
 
             chats[chat_id] = create_chat()
 
-            print(f"✨ Created new chat: {chat_id}")
+            print(
+                f"✨ Created chat: {chat_id}"
+            )
 
 
         # ----------------------------------------------------
@@ -291,9 +384,11 @@ def chat():
 
         if chat_id not in chats:
 
-            chats[chat_id] = create_chat()
+            print(
+                f"♻️ Recreating chat: {chat_id}"
+            )
 
-            print(f"♻️ Recreated chat: {chat_id}")
+            chats[chat_id] = create_chat()
 
 
         chat_session = chats[chat_id]
@@ -305,7 +400,7 @@ def chat():
 
         print()
         print("=" * 60)
-        print("👤 NEW USER MESSAGE")
+        print("👤 USER MESSAGE")
         print("=" * 60)
 
         print(message)
@@ -315,33 +410,43 @@ def chat():
         # SEND MESSAGE TO GEMINI
         # ----------------------------------------------------
 
+        print()
+        print("🧠 Sending request to Gemini...")
+
         response = chat_session.send_message(
             message=message
         )
 
 
         # ----------------------------------------------------
-        # GET RESPONSE TEXT
+        # GET RESPONSE
         # ----------------------------------------------------
 
         answer = response.text
 
+
         if not answer:
 
-            answer = "I couldn't generate a response."
+            answer = (
+                "I couldn't generate a response. "
+                "Please try again."
+            )
 
 
         # ----------------------------------------------------
-        # LOG GEMINI RESPONSE
+        # LOG RESPONSE
         # ----------------------------------------------------
 
         print()
-        print("🤖 NOVA:")
+        print("=" * 60)
+        print("🤖 NOVA RESPONSE")
+        print("=" * 60)
+
         print(answer)
 
 
         # ----------------------------------------------------
-        # RETURN RESPONSE TO FRONTEND
+        # SEND TO FRONTEND
         # ----------------------------------------------------
 
         return jsonify({
@@ -378,7 +483,10 @@ def chat():
 # HEALTH CHECK
 # ============================================================
 
-@app.route("/api/health", methods=["GET"])
+@app.route(
+    "/api/health",
+    methods=["GET"]
+)
 def health():
 
     return jsonify({
@@ -395,29 +503,42 @@ def health():
 
 
 # ============================================================
-# RUN SERVER
+# LOCAL DEVELOPMENT
 # ============================================================
 
 if __name__ == "__main__":
 
-    print()
-    print("=" * 60)
-    print("              ✦ NOVA AI BACKEND")
-    print("=" * 60)
-    print()
-    print(f"Model: {MODEL}")
-    print("Backend: Flask")
-    print("Tools: add, product")
-    print()
-    print("Server running at:")
-    print("http://127.0.0.1:5000")
-    print()
-    print("=" * 60)
-    print()
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
 
+    print()
+    print("=" * 60)
+    print("              ✦ NOVA AI")
+    print("=" * 60)
+
+    print()
+    print(f"Model  : {MODEL}")
+    print("Tools  : add, product")
+    print("Server : Flask")
+    print(f"Port   : {port}")
+
+    print()
+    print("Frontend:")
+    print(f"http://127.0.0.1:{port}")
+
+    print()
+    print("=" * 60)
 
     app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True
+
+        host="0.0.0.0",
+
+        port=port,
+
+        debug=False
+
     )
